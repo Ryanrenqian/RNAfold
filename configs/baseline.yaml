@@ -1,0 +1,4 @@
+exp_name: 'baseline'
+CUDA_VISIBLE_DEVICES: '7'
+PATH: '/root/autodl-tmp/renq/RNAfold/datas/'
+model_name: 'RNA_Model'

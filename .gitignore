@@ -1,0 +1,7 @@
+outputs
+datas
+.ipynb_checkpoints
+./nohup.out
+*.ipynb
+__pycache__
+nohup.out
