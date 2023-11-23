@@ -1,16 +1,18 @@
+import torch
+import torch.nn as nn
 import pandas as pd
 import os, gc
 import sys
 import numpy as np
 from sklearn.model_selection import KFold
-import torch
-import torch.nn as nn
-from torch.optim import AdamW,lr_scheduler
-import torch.nn.functional as F
-from fastai.vision.all import Metric
-from model import get_model, RNA_Model
-from torch.utils.data import DataLoader
+from fastai.vision.all import *
+from model import *
 from data import *
+from torch.optim import AdamW,lr_scheduler,Adam
+import torch.nn.functional as F
+
+from torch.utils.data import DataLoader
+
 from torch.cuda.amp import GradScaler, autocast
 import pandas as pd
 import pyarrow as pa
@@ -34,6 +36,15 @@ def seed_everything(seed):
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
+
+def cal_shrinkageloss(pred,target,alpha=10):
+    p = pred[target['mask'][:,:pred.shape[1]]]
+    y = target['react'][target['mask']].clip(0,1)
+    l1 = F.l1_loss(p, y, reduction='none')
+    loss = (l1*l1)/(1+ torch.exp(alpha*l1))
+    loss = loss[~torch.isnan(loss)].mean()
+    return loss
+    
 
 def calloss(pred,target,use_weight=False):
     p = pred[target['mask'][:,:pred.shape[1]]]
@@ -68,7 +79,7 @@ class MAE(Metric):
         return loss
     
 @torch.no_grad()
-def eval(model,dataloader:DataLoader,writer:SummaryWriter,epoch:int):
+def val(model,dataloader:DataLoader,writer:SummaryWriter,epoch:int):
     model.eval()
     mae = MAE()
     qbar = tqdm(dataloader)
@@ -82,34 +93,37 @@ def eval(model,dataloader:DataLoader,writer:SummaryWriter,epoch:int):
         
         
 
-def train(model,dataloader,optimizer,scheduler,epochs,output_dir):
+def train(model,dataloader,optimizer,scheduler,epochs,output_dir,loss_func):
     log_dir = f"{OUT}/logs"  # TensorBoard 日志目录
     writer = SummaryWriter(log_dir=log_dir)
     saver = TopModelHeap(output_dir=output_dir)
     model.train()
     step = 0
     train_mae = MAE()
+    iters = len(dataloader)
     for epoch in range(epochs):
         qbar = tqdm(dataloader)
-        for i,batch in enumerate(qbar):
+        for i, batch in enumerate(qbar):
             # batch.to('cuda')
             optimizer.zero_grad()
             # input = batch['input'].to('cuda')
             # target = batch['output'].to('cuda')
             input, target = batch
             pred = model(input)
-            loss = calloss(pred,target)
+            loss = loss_func(pred,target)
             loss.backward()
             nn.utils.clip_grad_value_(model.parameters(), clip_value=3.0)
             optimizer.step()
-            scheduler.step()
             step += 1
             train_mae.accumulate(pred,target)
-            qbar.set_description(f'Epoch - {epoch}-th Step {i}-th Train: MAE: {train_mae.value.item():.2f}, train loss: {loss.item():.2f}')
+            qbar.set_description(f'Epoch - {epoch}-th Train: MAE: {train_mae.value.item():.2f}, loss: {loss.item():.2f}')
+            # scheduler.step()
+            scheduler.step(epoch + i / iters)
+        # scheduler.step()
         writer.add_scalar('Train/Loss',train_mae.value.item(),epoch)
         writer.add_scalar('Train/LR',scheduler.get_last_lr()[0],epoch)
         train_mae.reset()
-        val_mae = eval(model,dl_val,writer,epoch)
+        val_mae = val(model,dl_val,writer,epoch)
         model_name = f'epoch_{epoch}_th.pth'
         saver.push(val_mae,model_name,model.state_dict())
         
@@ -119,12 +133,11 @@ if __name__ == '__main__':
         config = load_config(sys.argv[1])
     else:
         config = load_config('./configs/baseline.yaml')
+    print('Config',str(config))
     os.environ['CUDA_VISIBLE_DEVICES']= config['CUDA_VISIBLE_DEVICES']
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     fname = config['exp_name']
-    OUT = f'./outputs/{fname}'
     PATH = config['PATH']
-    # model = get_model(config['model_name']) 
     
     bs = 256
     num_workers = 8
@@ -132,31 +145,37 @@ if __name__ == '__main__':
     nfolds = 4
     fold = 0
     
-    epochs = 300
+    epochs = 200
     seed_everything(SEED)
-    os.makedirs(OUT, exist_ok=True)
-    df = pd.read_parquet(os.path.join(PATH,'train_data.parquet'))
-    Dataset = RNA_Dataset
-    ds_train = Dataset(df, mode='train', fold=fold, nfolds=nfolds)
-    ds_train_len = Dataset(df, mode='train', fold=fold, 
-                nfolds=nfolds, mask_only=True)
-    sampler_train = torch.utils.data.RandomSampler(ds_train_len)
-    len_sampler_train = LenMatchBatchSampler(sampler_train, batch_size=bs,
-                drop_last=True)
-    dl_train = DeviceDataLoader(DataLoader(ds_train, 
-                num_workers=num_workers,
-                persistent_workers=True,batch_sampler=len_sampler_train), device)
+    
+    df = pd.read_parquet('/root/autodl-tmp/RNAfold/datas/train_data.parquet')
+    Dataset = eval(config['Dataset'])
+    loss_func = eval(config.get('loss_func','calloss'))
+    for fold in range(nfolds):
+        OUT = f'./outputs/{fname}_fold_{fold}'
+        os.makedirs(OUT, exist_ok=True)
+        ds_train = Dataset(df, mode='train', fold=fold, nfolds=nfolds)
+        ds_train_len = Dataset(df, mode='train', fold=fold, 
+                    nfolds=nfolds, mask_only=True)
+        sampler_train = torch.utils.data.RandomSampler(ds_train_len)
+        len_sampler_train = LenMatchBatchSampler(sampler_train, batch_size=bs,
+                    drop_last=True)
+        dl_train = DeviceDataLoader(DataLoader(ds_train, 
+                    num_workers=num_workers,
+                    persistent_workers=True,batch_sampler=len_sampler_train), device)
 
-    ds_val = Dataset(df, mode='eval', fold=fold, nfolds=nfolds)
-    ds_val_len = Dataset(df, mode='eval', fold=fold, nfolds=nfolds, 
-            mask_only=True)
-    sampler_val = torch.utils.data.SequentialSampler(ds_val_len)
-    len_sampler_val = LenMatchBatchSampler(sampler_val, batch_size=bs, 
-            drop_last=False)
-    dl_val= DeviceDataLoader(DataLoader(ds_val, 
-            batch_sampler=len_sampler_val, num_workers=num_workers), device)
-    model =  RNA_Model()
-    model = model.to(device)
-    optimizer = AdamW(model.parameters(), lr=1e-3,weight_decay=0.05)
-    scheduler = lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=100,T_mult= 1000)
-    train(model,dl_train,optimizer,scheduler,epochs,OUT)
+        ds_val = Dataset(df, mode='eval', fold=fold, nfolds=nfolds)
+        ds_val_len = Dataset(df, mode='eval', fold=fold, nfolds=nfolds, 
+                mask_only=True)
+        sampler_val = torch.utils.data.SequentialSampler(ds_val_len)
+        len_sampler_val = LenMatchBatchSampler(sampler_val, batch_size=bs, 
+                drop_last=False)
+        dl_val= DeviceDataLoader(DataLoader(ds_val, 
+                batch_sampler=len_sampler_val, num_workers=num_workers), device)
+        model = load_model(config['model_name']) 
+        model = model.to(device)
+        optimizer = Adam(model.parameters(), lr=1e-3,weight_decay=0.05)
+        # scheduler= None
+        # scheduler = lr_scheduler.OneCycleLR(optimizer,max_lr=1e-3, steps_per_epoch=len(dl_train),epochs=200)
+        scheduler = lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=epochs)
+        train(model,dl_train,optimizer,scheduler,epochs,OUT,loss_func)

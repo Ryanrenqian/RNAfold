@@ -1,0 +1,95 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [
+    {
+      "id": 0,
+      "content": "<unk>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 25,
+      "content": "[PAD]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 26,
+      "content": "[SEP]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 27,
+      "content": "[MASK]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    }
+  ],
+  "normalizer": {
+    "type": "BertNormalizer",
+    "clean_text": true,
+    "handle_chinese_chars": true,
+    "strip_accents": null,
+    "lowercase": false
+  },
+  "pre_tokenizer": {
+    "type": "BertPreTokenizer"
+  },
+  "post_processor": null,
+  "decoder": {
+    "type": "BPEDecoder",
+    "suffix": "</w>"
+  },
+  "model": {
+    "type": "BPE",
+    "dropout": null,
+    "unk_token": "<unk>",
+    "continuing_subword_prefix": null,
+    "end_of_word_suffix": "</w>",
+    "fuse_unk": false,
+    "byte_fallback": false,
+    "vocab": {
+      "<unk>": 0,
+      "A": 1,
+      "C": 2,
+      "D": 3,
+      "E": 4,
+      "G": 5,
+      "K": 6,
+      "L": 7,
+      "M": 8,
+      "N": 9,
+      "P": 10,
+      "S": 11,
+      "U": 12,
+      "[": 13,
+      "]": 14,
+      "A</w>": 15,
+      "[</w>": 16,
+      "U</w>": 17,
+      "K</w>": 18,
+      "D</w>": 19,
+      "]</w>": 20,
+      "C</w>": 21,
+      "S</w>": 22,
+      "G</w>": 23,
+      "P</w>": 24
+    },
+    "merges": []
+  }
+}

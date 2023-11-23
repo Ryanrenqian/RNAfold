@@ -1,7 +1,13 @@
-outputs
+*/outputs
 datas
-.ipynb_checkpoints
+*/.ipynb_checkpoints
 ./nohup.out
 *.ipynb
 __pycache__
 nohup.out
+*.png
+*.yaml
+*.parquet
+./outside_resource
+*/inputs/*
+outside_resource/RNAdegformer-main.zip
