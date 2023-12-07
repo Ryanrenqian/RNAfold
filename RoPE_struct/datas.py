@@ -1,14 +1,48 @@
 from sklearn.model_selection import KFold
 import torch
 import numpy as np
-
-def prepare_targets(df):
+import random
+def prepare_targets(df,mode):
     label_cols = [c for c in df.columns if c.startswith('reactivity_0')]
     error_cols = [c for c in df.columns if c.startswith('reactivity_error_0')]
     targets = df[label_cols].values.astype(np.float32)
-    mask = df[error_cols].values.astype(np.float32) > 1.0
-    targets[mask] = np.nan
+    if mode =='train':
+        mask = df[error_cols].values.astype(np.float32) > 1.0
+        targets[mask] = np.nan
     return targets
+
+def mask_rna_input(sequence,nmute=.15):
+    nmute=int(sequence.shape[0]*nmute)
+    perm = torch.randperm(sequence.shape[0])
+    to_mutate = perm[:nmute]
+    masked_seq = sequence.clone()
+    masked_seq[to_mutate]=14
+    mlm_mask = torch.zeros_like(masked_seq,dtype=torch.bool)
+    mlm_mask[to_mutate] = 1
+    return masked_seq,mlm_mask
+
+class RibonanzaDatasetPreTrain():
+    def __init__(self, df, config,
+                 mask_only=False, **kwargs):
+        df = df.reset_index(drop=True)
+        self.sequences = df[['sequence','structure']].apply(lambda x: [config.vocab_map[c] for c in zip(x['sequence'], x['structure'])],axis=1)
+
+        
+    def __len__(self):
+        return len(self.sequences)
+    
+    def __getitem__(self, idx):
+        seq = self.sequences[idx]
+        seq = torch.tensor(seq, dtype=torch.long)
+        masked_seq,mlm_mask = mask_rna_input(seq)
+        outputs = {
+            'input_ids': masked_seq,
+            'attention_mask': torch.ones(len(seq), dtype=torch.bool),
+            'mlm_mask':mlm_mask, 
+        }
+        outputs['labels'] = seq
+        
+        return outputs
 
 class RibonanzaDatasetTrain():
     def __init__(self, df, config,mode='train', seed=2023, fold=0, nfolds=4, 
@@ -25,14 +59,13 @@ class RibonanzaDatasetTrain():
             df_DMS = df_DMS.loc[m].reset_index(drop=True)
         self.sequences = df_2A3[['sequence','structure']].apply(lambda x: [config.vocab_map[c] for c in zip(x['sequence'], x['structure'])],axis=1)
         
-        self.targets_DMS_MaP = prepare_targets(df_DMS)
-        self.targets_2A3_MaP = prepare_targets(df_2A3)
+        self.targets_DMS_MaP = prepare_targets(df_DMS,mode)
+        self.targets_2A3_MaP = prepare_targets(df_2A3,mode)
         
     def __len__(self):
         return len(self.sequences)
     
     def __getitem__(self, idx):
-        
         seq = self.sequences[idx]
         outputs = {
             'input_ids': torch.tensor(seq, dtype=torch.long),

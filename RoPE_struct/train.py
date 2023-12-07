@@ -1,10 +1,10 @@
 from datas import RibonanzaDatasetTrain # type: ignore
-from torch.nn.utils.rnn import pad_sequence
 from models import RNAConfig, RNAModel,RNALayerNorm
 import torch
 import torch.nn as nn
 import pandas as pd
 from transformers import TrainingArguments, Trainer
+from utils import collate_fn
 ALL_LAYERNORM_LAYERS = [nn.LayerNorm, RNALayerNorm]
 
 class CustomTrainer(Trainer):
@@ -67,22 +67,25 @@ def get_parameter_names(model, forbidden_layer_types):
     result += list(model._parameters.keys())
     return result
 
-def collate_fn(batch):
-    new_batch = dict()
-    for k in batch[0].keys():
-        new_batch[k] = pad_sequence((i[k] for i in batch), batch_first=True, padding_value=0) # type: ignore
-    return new_batch
-
 if __name__ =='__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     config = RNAConfig()
-    df = pd.read_parquet('../datas/data_struct/train_data.parquet')
+    df = pd.read_parquet('./datas/data_struct/train_data_eternerfold.parquet')
     model = RNAModel(config)
-
+    # set param
+    expname = 'RoPE_struct'
+    model_name = 'checkpoint-507600' # 预训练
+    out = f"./{expname}/outputs/RoPE-{model_name}"
+    print('Pretrained Model:', model_name)
+    print('Save Model:', out)
+    checkpoint = torch.load(f'./{expname}/pretrain/{model_name}/pytorch_model.bin')
+    checkpoint.pop('head.weight')
+    checkpoint.pop('head.bias')
+    model.load_state_dict(checkpoint,strict=False)
     train_ds = RibonanzaDatasetTrain(df, config,mode='train')
     valid_ds = RibonanzaDatasetTrain(df, config,mode='eval')
     training_args = TrainingArguments(
-        output_dir="./outputs/RoPE",
+        output_dir = out,
         evaluation_strategy="epoch",
         save_strategy="epoch",
         logging_strategy="steps",
@@ -94,7 +97,7 @@ if __name__ =='__main__':
         per_device_train_batch_size=256, 
         per_device_eval_batch_size=512,
         load_best_model_at_end=True,
-        save_total_limit=1,
+        save_total_limit=3,
         report_to=["tensorboard"],
         dataloader_num_workers=16,
         lr_scheduler_type='constant_with_warmup',

@@ -20,7 +20,8 @@ class RNAConfig:
         ('U', '('): 10,
         ('U', '.'): 11,
         ('U', ')'): 12,
-        'SINK_TOKEN': 13 }
+        'SINK_TOKEN': 13,
+                'MASK':14 }
     vocab_size = len(vocab_map)
     hidden_size = 128
     intermediate_size = 256
@@ -268,18 +269,25 @@ class RNATransformer(nn.Module):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
-
-def loss_fn(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    
+            
+def loss_fn(outputs: torch.Tensor, targets: torch.Tensor,*args,**kwargs) -> torch.Tensor:
     outputs = outputs[~targets.isnan()]
     targets = targets[~targets.isnan()].clip(0,1)
     return F.l1_loss(outputs, targets)
 
 class RNAModel(nn.Module):
-    def __init__(self, config: RNAConfig):
+    def __init__(self, config: RNAConfig,pretrain=False):
         super().__init__()
         self._config =  config
         self.backbone = RNATransformer(config)
-        self.head = nn.Linear(config.hidden_size, 2)
+        self.pretrain = pretrain
+        if pretrain:
+            self.head = nn.Linear(config.hidden_size, len(config.vocab_map))
+            self.loss_fn = nn.CrossEntropyLoss()
+        else:
+            self.head = nn.Linear(config.hidden_size, 2)
+            self.loss_fn = loss_fn
         self.post_init()
 
     def forward(
@@ -290,6 +298,7 @@ class RNAModel(nn.Module):
         inputs_embeds: Optional[torch.FloatTensor] = None,
         output_hidden_states: Optional[bool] = None,
         labels: Optional[torch.FloatTensor] = None,
+        mlm_mask: Optional[torch.FloatTensor] = None,
         **kwargs
     ) -> TokenClassifierOutput:
         
@@ -304,7 +313,7 @@ class RNAModel(nn.Module):
 
         loss = None
         if labels is not None:
-            loss = loss_fn(predictions, labels)
+            loss = self.loss_fn(predictions[mlm_mask], labels[mlm_mask] )
 
         return TokenClassifierOutput(
             loss=loss, # type: ignore

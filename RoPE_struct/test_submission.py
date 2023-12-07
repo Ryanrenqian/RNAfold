@@ -8,15 +8,13 @@ import numpy as np
 def collate_fn(batch):
     new_batch = dict()
     for k in batch[0].keys():
-        if key != 'ids':
-            new_batch[k] = pad_sequence((i[k] for i in batch), batch_first=True, padding_value=0) # type: ignore
-        else:
-            new_batch[k] = pad_sequence((i[k] for i in batch), batch_first=True, padding_value=-1) #
+        new_batch[k] = pad_sequence((i[k] for i in batch), batch_first=True, padding_value=0) # type: ignore
     return new_batch
 if __name__ =='__main__':
-    model_name = 'checkpoint-151704'
-    checkpoint = torch.load(f'./outputs/RoPE/{model_name}/pytorch_model.bin')
-    save = f'./outputs/RoPE/{model_name}/submission.parquet'
+    pretrain = 'checkpoint-355320'
+    model_name = 'checkpoint-154112'
+    checkpoint = torch.load(f'./outputs/RoPE-{pretrain}/{model_name}/pytorch_model.bin')
+    save = f'./outputs/RoPE-{pretrain}/{model_name}/submission.parquet'
     df_test = pd.read_parquet('../datas/data_struct/test_sequences.parquet')
     config = RNAConfig()
     ds = RibonanzaDatasetTest(df_test,config)
@@ -37,7 +35,7 @@ if __name__ =='__main__':
             output = model(**batch)
             p = torch.nan_to_num(output.logits).clip(0,1)
             for idx, pi in zip(batch['ids'],p):
-                idx = idx[idx != -1] # 去掉pad部分
+                idx = idx[idx != 0] # 去掉pad部分
                 ids.append(idx)
                 preds.append(pi[:len(idx)])
     ids = torch.concat(ids).cpu()
