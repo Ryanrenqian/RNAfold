@@ -1,5 +1,6 @@
 from torch.nn.utils.rnn import pad_sequence
 from transformers import  Trainer
+from models import RNAConfig, RNAModel,RNALayerNorm
 import torch
 import torch.nn as nn
 ALL_LAYERNORM_LAYERS = [nn.LayerNorm, RNALayerNorm]

@@ -4,6 +4,7 @@ from torch.nn.utils.rnn import pad_sequence
 from transformers import  Trainer
 import torch
 import torch.nn as nn
+from models import RNAConfig, RNAModel,RNALayerNorm
 ALL_LAYERNORM_LAYERS = [nn.LayerNorm, RNALayerNorm]
 
 def collate_fn(batch):

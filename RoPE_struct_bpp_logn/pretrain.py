@@ -20,6 +20,8 @@ if __name__ =='__main__':
     now = datetime.datetime.now()
     timestamp = now.strftime("%b%d_%H-%M-%S")
     out = f"./{expname}/pretrain/{timestamp}"
+    print('Expname',expname)
+    print('Saved',out)
     train_ds = RibonanzaDatasetPreTrain(df, config)
     training_args = TrainingArguments(
         output_dir=out,
