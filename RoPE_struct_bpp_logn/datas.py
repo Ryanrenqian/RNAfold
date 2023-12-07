@@ -40,7 +40,6 @@ class RibonanzaDatasetPreTrain():
         self.sequences = df[['sequence','structure']].apply(lambda x: [config.vocab_map[c] for c in zip(x['sequence'], x['structure'])],axis=1)
         self.data_path = data_path
         self.sequences_id = df['sequence_id']
-        assert len(self.sequences) == len(self.bbps)
         
     def __len__(self):
         return len(self.sequences)
