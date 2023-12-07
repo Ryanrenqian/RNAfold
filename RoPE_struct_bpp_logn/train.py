@@ -74,7 +74,7 @@ if __name__ =='__main__':
     df = pd.read_parquet('./datas/data_struct/train_data_eternerfold.parquet')
     model = RNAModel(config)
     # set param
-    expname = 'RoPE_struct'
+    expname = 'RoPE_struct_bpp_logn'
     model_name = 'checkpoint-507600' # 预训练
     now = datetime.datetime.now()
     timestamp = now.strftime("%b%d_%H-%M-%S")

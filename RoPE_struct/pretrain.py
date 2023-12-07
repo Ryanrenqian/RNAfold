@@ -6,6 +6,7 @@ import torch.nn as nn
 import pandas as pd
 from transformers import TrainingArguments, Trainer
 from utils import collate_fn
+import datetime
 ALL_LAYERNORM_LAYERS = [nn.LayerNorm, RNALayerNorm]
 
 
@@ -73,11 +74,17 @@ def get_parameter_names(model, forbidden_layer_types):
 if __name__ =='__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     config = RNAConfig()
-    df = pd.read_parquet('../datas/data_struct/pretrain_eternerfold.parquet')
+    df = pd.read_parquet('./datas/data_struct/pretrain_eternerfold.parquet')
+    expname = 'RoPE_struct'
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%b%d_%H-%M-%S")
+    out = f"./{expname}/pretrain/{timestamp}"
+    print('Expname',expname)
+    print('Saved',out)
     model = RNAModel(config,pretrain=True)
     train_ds = RibonanzaDatasetPreTrain(df, config)
     training_args = TrainingArguments(
-        output_dir="./outputs/RoPE_pretrain",
+        output_dir=out,
         evaluation_strategy="no",
         save_strategy="epoch",
         logging_strategy="steps",
@@ -88,11 +95,11 @@ if __name__ =='__main__':
         weight_decay=0.05,
         per_device_train_batch_size=128, 
         load_best_model_at_end=False,
-        save_total_limit=10,
+        save_total_limit=3,
         report_to=["tensorboard"],
         dataloader_num_workers=16,
         lr_scheduler_type='constant_with_warmup',
-        warmup_ratio=0.2
+        warmup_ratio=0.1
     )
     trainer = CustomTrainer(
         args=training_args, 
