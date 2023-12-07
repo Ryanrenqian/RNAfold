@@ -10,10 +10,12 @@ ALL_LAYERNORM_LAYERS = [nn.LayerNorm, RNALayerNorm]
 def collate_fn(batch):
     new_batch = dict()
     for k in batch[0].keys():
-        if k == 'bbps' or k== 'ids' or k == 'logn':
+        if k == 'bbps' or  k == 'logn':
             continue
-        new_batch[k] = pad_sequence((i[k] for i in batch), batch_first=True, padding_value=0) # type: ignore
-
+        if k != 'ids':
+            new_batch[k] = pad_sequence((i[k] for i in batch), batch_first=True, padding_value=0) # type: ignore
+        else:
+            new_batch[k] = pad_sequence((i[k] for i in batch), batch_first=True, padding_value=-1) # type: ignore
     length = new_batch['input_ids'].shape[1] # bs ,l, d
     bbps = []
     for i in batch:

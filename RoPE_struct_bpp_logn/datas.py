@@ -35,11 +35,12 @@ def get_distance(seq,k=4):
 
 class RibonanzaDatasetPreTrain():
     def __init__(self, df, config,
-                 mask_only=False,data_path='./datas/data_struct', **kwargs):
+                 mask_only=False,data_path='./datas/data_struct',use_sparse=False, **kwargs):
         df = df.reset_index(drop=True)
         self.sequences = df[['sequence','structure']].apply(lambda x: [config.vocab_map[c] for c in zip(x['sequence'], x['structure'])],axis=1)
         self.data_path = data_path
         self.sequences_id = df['sequence_id']
+        self.use_sparse = use_sparse
         
     def __len__(self):
         return len(self.sequences)
@@ -47,7 +48,7 @@ class RibonanzaDatasetPreTrain():
     def __getitem__(self, idx):
         seq = self.sequences.iloc[idx]
         if self.use_sparse:
-            bbps = load_npz(os.path.join(self.data_path,self.sequences_id[idx])+'.npy').toarray()
+            bbps = load_npz(os.path.join(self.data_path,self.sequences_id[idx])+'.npz').toarray()
         else:
             bbps = np.load(os.path.join(self.data_path,self.sequences_id[idx])+'.npy.npy')
         dis = get_distance(seq)
@@ -65,12 +66,6 @@ class RibonanzaDatasetPreTrain():
             
         }
         return outputs
-    
-    def load_bbps(self,bbp_path):
-        bpps = []
-        for p in bbp_path:
-            bpps.append(np.load(os.path.join(self.data_path,p)+'.npy'))
-        return bpps
     
 class RibonanzaDatasetTrain():
     def __init__(self, df, config,mode='train', seed=2023, fold=0, nfolds=4, 
@@ -104,7 +99,7 @@ class RibonanzaDatasetTrain():
         seq = self.sequences[idx]
         logn = math.log(len(seq),512)
         if self.use_sparse:
-            bbps = load_npz(os.path.join(self.data_path,self.sequences_id[idx])+'.npy').toarray()
+            bbps = load_npz(os.path.join(self.data_path,self.sequences_id[idx])+'.npz').toarray()
         else:
             bbps = np.load(os.path.join(self.data_path,self.sequences_id[idx])+'.npy.npy')
         dis = get_distance(seq)
@@ -125,7 +120,7 @@ class RibonanzaDatasetTrain():
     def load_bbps(self,bbp_path):
         bpps = []
         for p in bbp_path:
-            bpps.append(np.load(os.path.join(self.data_path,p)+'.npy'))
+            bpps.append(np.load(os.path.join(self.data_path,p)+'.npz'))
         return bpps
 
 class RibonanzaDatasetTest():
@@ -145,7 +140,7 @@ class RibonanzaDatasetTest():
         seq = self.sequences[idx]
         logn = math.log(len(seq),512)
         if self.use_sparse:
-            bbps = load_npz(os.path.join(self.data_path,self.sequences_id[idx])+'.npy').toarray()
+            bbps = load_npz(os.path.join(self.data_path,self.sequences_id[idx])+'.npz').toarray()
         else:
             bbps = np.load(os.path.join(self.data_path,self.sequences_id[idx])+'.npy.npy')
         dis = get_distance(seq)
